@@ -27,10 +27,12 @@ def _extract_letter_from_response(response: str, valid_letters: Iterable[str]) -
         return None
 
     text = _strip_chain_of_thought(response)
+    # The letter must stand alone: matching is case-insensitive, so without the
+    # word boundaries "answer is definitely B" would capture the "d" of "definitely".
     patterns = [
-        r"(?:answer|option|choice)\s*(?:is|:)?\s*([A-Z])",
-        r"([A-Z])\s*(?:is\s*(?:the)?\s*correct)",
-        r"final\s*(?:answer|option)\s*(?:is|:)?\s*([A-Z])",
+        r"(?:answer|option|choice)\s*(?:is|:)?\s*\b([A-Z])\b",
+        r"\b([A-Z])\b\s*(?:is\s*(?:the)?\s*correct)",
+        r"final\s*(?:answer|option)\s*(?:is|:)?\s*\b([A-Z])\b",
     ]
 
     valid_letters = {letter.upper() for letter in valid_letters}
@@ -114,7 +116,9 @@ def compute_gpqa_reward(response: str, label, metadata: dict | None = None) -> f
         if value:
             candidate_answers.append(str(value))
 
-    if label_text:
+    # A bare option letter is not answer text: as a substring target it would
+    # match nearly any response (label "C" is contained in "i cannot decide").
+    if label_text and not (len(label_text) == 1 and label_text.upper() in string.ascii_uppercase):
         candidate_answers.append(label_text)
 
     normalized_targets = {_normalize_text(text) for text in candidate_answers if text}

@@ -56,6 +56,22 @@ def test_extract_letter_named_patterns_and_fallback(response, expected):
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "response,expected",
+    [
+        # The named patterns are case-insensitive; the letter must still be a
+        # standalone token, not the first/last letter of an ordinary word.
+        ("The answer is definitely B.", "B"),
+        ("The answer is clearly B.", "B"),
+        ("The answer is actually C.", "C"),
+        ("I think the idea is correct, so B.", "B"),
+    ],
+)
+def test_extract_letter_ignores_letters_inside_words(response, expected):
+    assert _extract_letter_from_response(response, ["A", "B", "C", "D"]) == expected
+
+
+@pytest.mark.unit
 def test_extract_letter_strips_chain_of_thought_before_matching():
     """``</think>`` marker → keep only the trailing segment. Without the
     strip, the earlier "Answer: A" would win over the real answer "B"."""
@@ -159,6 +175,21 @@ def test_reward_correct_letter_metadata_overrides_label():
         metadata={"correct_letter": "a"},  # lowercase ok — gets upper()'d
     )
     assert reward == 1.0
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "response,label,metadata",
+    [
+        ("random text", "A", None),
+        ("I cannot decide", "C", {"choices": ["w", "x", "y", "z"]}),
+        ("maybe later", "B", {"correct_letter": "B"}),
+    ],
+)
+def test_reward_letter_label_is_not_a_text_match_target(response, label, metadata):
+    """A response naming no option must score 0 even though it contains the
+    label's letter somewhere inside a word."""
+    assert compute_gpqa_reward(response, label=label, metadata=metadata) == 0.0
 
 
 @pytest.mark.unit

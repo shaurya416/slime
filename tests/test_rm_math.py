@@ -228,6 +228,15 @@ def test_grade_answer_verl_returns_false_on_missing_extraction():
 def test_grade_answer_verl_returns_false_on_empty_ground_truth():
     """Empty / falsy ground truth → False at the top guard."""
     assert grade_answer_verl(r"\boxed{42}", "") is False
+    assert grade_answer_verl(r"\boxed{42}", None) is False
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("label", [0, 0.0, "0"])
+def test_grade_answer_verl_accepts_zero_label(label):
+    """A numeric label of 0 is falsy but is a real answer, not a missing one."""
+    assert grade_answer_verl(r"so the answer is \boxed{0}", label) is True
+    assert grade_answer_verl(r"so the answer is \boxed{1}", label) is False
 
 
 if __name__ == "__main__":
