@@ -5,7 +5,9 @@ import numpy as np
 import pytest
 import torch
 
-from slime.observability.rollout_metrics import _compute_top_p_kept_vocab_metrics
+from slime.observability import rollout_metrics
+from slime.observability.rollout_metrics import _compute_top_p_kept_vocab_metrics, log_eval_rollout_data
+from slime.utils.eval_config import EvalDatasetConfig
 from slime.utils.misc import decode_int32_meta_array
 from slime.utils.types import Sample
 
@@ -215,6 +217,35 @@ def test_append_response_tokens_rejects_non_trainable_log_probs():
 
     with pytest.raises(ValueError, match="non-trainable response tokens should not pass rollout log probabilities"):
         sample.append_response_tokens(tokens=[10], log_probs=[-0.1], trainable=False)
+
+
+@pytest.mark.unit
+def test_eval_passrate_uses_each_dataset_group_size(monkeypatch):
+    monkeypatch.setattr(rollout_metrics.logging_utils, "log", lambda *args, **kwargs: None)
+    args = Namespace(
+        custom_eval_rollout_log_function_path=None,
+        log_passrate=True,
+        n_samples_per_eval_prompt=8,
+        wandb_always_use_train_step=False,
+        eval_datasets=[
+            EvalDatasetConfig(name="sampled", path="unused.jsonl", n_samples_per_eval_prompt=4),
+            EvalDatasetConfig(name="greedy", path="unused.jsonl", n_samples_per_eval_prompt=1),
+        ],
+    )
+    data = {
+        # 4 prompts x 4 samples; only the first prompt is solved.
+        "sampled": {"rewards": [1, 1, 1, 1] + [0] * 12},
+        # 10 prompts x 1 sample.
+        "greedy": {"rewards": [1, 0] * 5},
+    }
+
+    log_dict = log_eval_rollout_data(0, args, data)
+
+    assert log_dict["eval/sampled-pass@1"] == pytest.approx(0.25)
+    assert log_dict["eval/sampled-pass@4"] == pytest.approx(0.25)
+    assert "eval/sampled-pass@8" not in log_dict
+    assert log_dict["eval/greedy"] == pytest.approx(0.5)
+    assert not any(key.startswith("eval/greedy-pass@") for key in log_dict)
 
 
 if __name__ == "__main__":

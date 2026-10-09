@@ -159,12 +159,15 @@ def _build_messages(data: dict, prompt_key: str, as_conversation: bool, multimod
                 if multimodal_data is not None:
                     multimodals[mt.placeholder] = (mt, list(multimodal_data))
 
-        pattern = "(" + "|".join(re.escape(p) for p in multimodals.keys()) + ")"
+        # A row with no media leaves `multimodals` empty; the pattern would then be
+        # "()", which re.split matches between every character of the text.
+        pattern = "(" + "|".join(re.escape(p) for p in multimodals.keys()) + ")" if multimodals else None
 
         for message in prompt:
             if isinstance(message["content"], str):
                 content_list = []
-                for segment in re.split(pattern, message["content"]):
+                segments = re.split(pattern, message["content"]) if pattern else [message["content"]]
+                for segment in segments:
                     if not segment:
                         continue
                     if segment in multimodals:

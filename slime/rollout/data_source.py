@@ -90,17 +90,23 @@ class RolloutDataSource(DataSource):
     def get_samples(self, num_samples):
         # TODO further improve code
         if self.dataset is not None:
-            if self.sample_offset + num_samples <= len(self.dataset):
-                prompt_samples = self.dataset.samples[self.sample_offset : self.sample_offset + num_samples]
-                self.sample_offset += num_samples
-            else:
-                prompt_samples = self.dataset.samples[self.sample_offset :]
-                num_samples -= len(prompt_samples)
-                self.epoch_id += 1
-                if self.args.rollout_shuffle:
-                    self.dataset.shuffle(self.epoch_id)
-                prompt_samples += self.dataset.samples[:num_samples]
-                self.sample_offset = num_samples
+            prompt_samples = []
+            # A request larger than the rows left in this epoch continues into
+            # the next epoch, as many times as it takes to fill it.
+            while len(prompt_samples) < num_samples:
+                if len(self.dataset) == 0:
+                    raise ValueError(
+                        "The prompt dataset is empty, so no samples can be drawn from it. "
+                        "Check --prompt-data and whether --rollout-max-prompt-len filtered out every prompt."
+                    )
+                if self.sample_offset >= len(self.dataset):
+                    self.epoch_id += 1
+                    if self.args.rollout_shuffle:
+                        self.dataset.shuffle(self.epoch_id)
+                    self.sample_offset = 0
+                num_taken = min(num_samples - len(prompt_samples), len(self.dataset) - self.sample_offset)
+                prompt_samples += self.dataset.samples[self.sample_offset : self.sample_offset + num_taken]
+                self.sample_offset += num_taken
         else:
             prompt_samples = [Sample() for _ in range(num_samples)]
 

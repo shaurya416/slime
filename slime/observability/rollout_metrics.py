@@ -228,6 +228,9 @@ def log_eval_rollout_data(rollout_id, args, data, extra_metrics: dict[str, Any] 
             return
 
     log_dict = extra_metrics or {}
+    # Each eval dataset may override n_samples_per_eval_prompt, so the pass@k
+    # group size has to come from that dataset's config, not the CLI default.
+    eval_group_sizes = {cfg.name: cfg.n_samples_per_eval_prompt for cfg in getattr(args, "eval_datasets", None) or []}
     for key in data.keys():
         rewards = data[key]["rewards"]
         log_dict[f"eval/{key}"] = sum(rewards) / len(rewards)
@@ -240,7 +243,7 @@ def log_eval_rollout_data(rollout_id, args, data, extra_metrics: dict[str, Any] 
             log_dict |= dict_add_prefix(
                 compute_pass_rate(
                     flat_rewards=rewards,
-                    group_size=args.n_samples_per_eval_prompt,
+                    group_size=eval_group_sizes.get(key) or args.n_samples_per_eval_prompt,
                 ),
                 f"eval/{key}-",
             )
