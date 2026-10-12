@@ -154,10 +154,15 @@ def _build_messages(data: dict, prompt_key: str, as_conversation: bool, multimod
         multimodals = {}
         for type_name, data_key in multimodal_keys.items():
             mt = MultimodalTypes.get(type_name)
-            if mt:
-                multimodal_data = data.get(data_key)
-                if multimodal_data is not None:
-                    multimodals[mt.placeholder] = (mt, list(multimodal_data))
+            if mt is None:
+                # Skipping it would drop the row's media and leave its placeholder in the text.
+                raise ValueError(
+                    f"Unknown media type {type_name!r} in multimodal keys {multimodal_keys}; "
+                    f"expected one of {[m.name for m in MultimodalTypes.all()]}"
+                )
+            multimodal_data = data.get(data_key)
+            if multimodal_data is not None:
+                multimodals[mt.placeholder] = (mt, list(multimodal_data))
 
         # A row with no media leaves `multimodals` empty; the pattern would then be
         # "()", which re.split matches between every character of the text.

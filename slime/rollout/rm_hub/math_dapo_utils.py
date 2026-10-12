@@ -207,7 +207,11 @@ def is_correct_minerva(
     else:
         gt = normalize_final_answer(gt)
 
-    gt = str(int(float(gt)))  # in dapo, all answers are integers
+    # in dapo, all answers are integers: canonicalize "42.0" to "42", but keep a
+    # non-integer label as written instead of truncating "1.5" to "1".
+    gt_value = float(gt)
+    if gt_value.is_integer():
+        gt = str(int(gt_value))
 
     return (pred == gt), pred
 

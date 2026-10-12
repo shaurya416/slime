@@ -64,5 +64,16 @@ def test_row_with_image_still_splits_on_the_placeholder():
     ]
 
 
+@pytest.mark.unit
+@pytest.mark.parametrize("type_name", ["images", "Image", "img"])
+def test_unknown_media_type_is_rejected(type_name):
+    """A media type name that is not image/video/audio used to be skipped: the
+    row's media was dropped and the literal "<image>" stayed in the prompt."""
+    row = {"text": "<image> What is shown?", "images": ["a.png"]}
+
+    with pytest.raises(ValueError, match=type_name):
+        _build_messages(row, "text", True, {type_name: "images"})
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__]))

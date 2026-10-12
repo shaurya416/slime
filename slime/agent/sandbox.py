@@ -377,14 +377,27 @@ class E2BSandbox:
             lambda: self._sb.files.write(sandbox_path, content, user=user),
         )
 
+    # Raised by the SDK for a path that does not exist (FileNotFoundException on
+    # current SDKs, a bare NotFoundException on older ones). SandboxNotFoundException
+    # also derives from NotFoundException, so match the exact class names.
+    _MISSING_FILE_ERRORS = frozenset({"FileNotFoundException", "NotFoundException"})
+
     async def read_file(self, sandbox_path: str, *, user: str = "root") -> str:
+        """Read a file from the sandbox; a file that does not exist reads as "".
+
+        Any other failure (dead sandbox, exhausted transient retries) is
+        re-raised rather than returned as empty content, so a grader cannot
+        mistake an infrastructure failure for a model that produced nothing.
+        """
         try:
             return await self._rpc_retry(
                 f"read_file({sandbox_path})",
                 lambda: self._sb.files.read(sandbox_path, user=user),
             )
-        except Exception:
-            return ""
+        except Exception as e:
+            if type(e).__name__ in self._MISSING_FILE_ERRORS:
+                return ""
+            raise
 
 
 async def ensure_agent_user(sb: Sandbox, workdir: str) -> None:

@@ -177,6 +177,32 @@ def test_is_correct_minerva_takes_last_answer_match():
 
 
 @pytest.mark.unit
+def test_is_correct_minerva_collapses_integral_float_label():
+    correct, pred = is_correct_minerva("Answer: 42", "42.0")
+    assert correct is True
+    assert pred == "42"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "response, label",
+    [("Answer: 1", "1.5"), ("Answer: 0", "0.5"), ("Answer: -1", "-1.9")],
+)
+def test_compute_score_does_not_truncate_non_integer_label(response, label):
+    """A non-integer label was truncated to its integer part, so the wrong
+    answer "1" scored +1.0 against "1.5"."""
+    out = compute_score(response, label)
+    assert out["score"] == -1.0
+    assert out["acc"] is False
+
+
+@pytest.mark.unit
+def test_compute_score_accepts_exact_non_integer_label():
+    out = compute_score("Answer: 1.5", "1.5")
+    assert out == {"score": 1.0, "acc": True, "pred": "1.5"}
+
+
+@pytest.mark.unit
 def test_is_correct_minerva_no_answer_marker_is_invalid():
     """No ``Answer: ...`` in text → ``[INVALID]`` sentinel → mismatch."""
     correct, _ = is_correct_minerva("just a number 42", "42")
