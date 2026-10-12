@@ -230,6 +230,54 @@ def test_generate_aborts_on_missing_image():
         asyncio.run(run_case(mp))
 
 
+def test_generate_aborts_when_diff_capture_fails():
+    """A failed `git diff` is not an empty patch: grading the unmodified repo
+    would score the sample on work the model never got credit or blame for."""
+
+    async def run_case(monkeypatch):
+        tok = FakeTokenizer()
+        sandbox_factory = FakeSandbox.factory(
+            on_launch=_anthropic_agent,
+            responses=[("git diff", (128, "", "fatal: Unable to create '.git/index.lock': File exists."))],
+        )
+        _patch_generate(monkeypatch, tok, sandbox_factory)
+
+        samples = await gen.generate(_args(), _base_sample(), sampling_params={"max_new_tokens": 32})
+
+        assert len(samples) == 1
+        assert samples[0].status == Sample.Status.ABORTED
+        assert samples[0].remove_sample
+        assert samples[0].metadata.get("abort_reason") == "exception:RuntimeError"
+
+    with pytest.MonkeyPatch.context() as mp:
+        asyncio.run(run_case(mp))
+
+
+def test_generate_aborts_on_row_without_grader():
+    """A scaleswe row with no swepro / eval_cmd / f2p_script cannot be graded,
+    so it is rejected up front instead of every rollout being scored 0."""
+
+    async def run_case(monkeypatch):
+        tok = FakeTokenizer()
+        launches = []
+
+        async def agent(env):
+            launches.append(env)
+            return await _anthropic_agent(env)
+
+        _patch_generate(monkeypatch, tok, FakeSandbox.factory(on_launch=agent))
+
+        samples = await gen.generate(_args(), _base_sample(eval_cmd=None), sampling_params={"max_new_tokens": 32})
+
+        assert len(samples) == 1
+        assert samples[0].status == Sample.Status.ABORTED
+        assert samples[0].metadata.get("abort_reason") == "unevaluatable:missing_grader"
+        assert not launches  # rejected before the agent ran
+
+    with pytest.MonkeyPatch.context() as mp:
+        asyncio.run(run_case(mp))
+
+
 # ===========================================================================
 # §2 the Codex + OpenAI pair closes the same loop (hand-wired)
 # ===========================================================================

@@ -151,7 +151,13 @@ def _coerce_prompt(prompt) -> str:
 def evaluability_check(md: dict) -> str | None:
     if md.get("protocol") == PROTOCOL_SWEBENCH:
         return _evaluability_check_swebench(md)
-    return "protocol_row_mismatch:looks_swebench" if md.get("looks_swebench") else None
+    if md.get("looks_swebench"):
+        return "protocol_row_mismatch:looks_swebench"
+    grading = md.get("grading") or {}
+    if not (grading.get("swepro") or grading.get("eval_cmd") or grading.get("f2p_script")):
+        # Nothing could score the diff, so every rollout would read as unsolved.
+        return "missing_grader"
+    return None
 
 
 def _evaluability_check_swebench(md: dict) -> str | None:
@@ -229,7 +235,11 @@ async def apply_pre_commands(sb: Sandbox, workdir: str, pre: list[str] | str) ->
 # ---------------------------------------------------------------------------
 async def git_diff(sb: Sandbox, workdir: str) -> str:
     cmd = f"cd {workdir} && git add -N . && git diff -- . ':(exclude)PROBLEM_STATEMENT.md' ':(exclude).harness/'"
-    _, out, _ = await sb.exec(cmd, user="agent", timeout=120)
+    ec, out, err = await sb.exec(cmd, user="agent", timeout=120)
+    if ec != 0:
+        # An empty stdout here is not "no changes": grading it would score the
+        # untouched repo as the model's work.
+        raise RuntimeError(f"git diff failed in {workdir} (exit={ec}): {err[:400]}")
     return out
 
 

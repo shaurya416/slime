@@ -59,8 +59,8 @@ def test_extract_letter_named_patterns_and_fallback(response, expected):
 @pytest.mark.parametrize(
     "response,expected",
     [
-        # The named patterns are case-insensitive; the letter must still be a
-        # standalone token, not the first/last letter of an ordinary word.
+        # The named patterns' keywords are case-insensitive; the letter must still
+        # be a standalone token, not the first/last letter of an ordinary word.
         ("The answer is definitely B.", "B"),
         ("The answer is clearly B.", "B"),
         ("The answer is actually C.", "C"),
@@ -69,6 +69,32 @@ def test_extract_letter_named_patterns_and_fallback(response, expected):
 )
 def test_extract_letter_ignores_letters_inside_words(response, expected):
     assert _extract_letter_from_response(response, ["A", "B", "C", "D"]) == expected
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "response,expected",
+    [
+        # The article "a" after a keyword is a word, not option A.
+        ("The answer is a subtle one. Weighing the options, the final answer is C.", "C"),
+        ("This option is a trap, so B is correct.", "B"),
+        ("My choice is a hard one, but I settle on D.", "D"),
+        ("The answer is a bit tricky; Answer: B", "B"),
+        # Keywords still match in any case.
+        ("THE ANSWER IS C", "C"),
+        ("final answer: D", "D"),
+    ],
+)
+def test_extract_letter_ignores_lowercase_article(response, expected):
+    assert _extract_letter_from_response(response, ["A", "B", "C", "D"]) == expected
+
+
+@pytest.mark.unit
+def test_reward_article_a_does_not_override_stated_answer():
+    choices = {"choices": ["w", "x", "y", "z"]}
+    response = "The answer is a subtle one. Weighing the options, the final answer is C."
+    assert compute_gpqa_reward(response, label="C", metadata=dict(choices)) == 1.0
+    assert compute_gpqa_reward(response, label="A", metadata=dict(choices)) == 0.0
 
 
 @pytest.mark.unit
